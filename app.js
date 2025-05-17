@@ -1,17 +1,15 @@
 const os = require('os');
 const http = require('http');
-const https = require('https');
 const { Buffer } = require('buffer');
 const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 const net = require('net');
+const tls = require('tls'); // 新增
 const { exec, execSync } = require('child_process');
 const { WebSocket, createWebSocketStream } = require('ws');
-
 const logcb = (...args) => console.log.bind(this, ...args);
 const errcb = (...args) => console.error.bind(this, ...args);
-
 const UUID = process.env.UUID || 'b28f60af-d0b9-4ddf-baaa-7e49c93c380b';
 const uuid = UUID.replace(/-/g, "");
 const NEZHA_SERVER = process.env.NEZHA_SERVER || 'nezha.gvkoyeb.eu.org';
@@ -19,64 +17,10 @@ const NEZHA_PORT = process.env.NEZHA_PORT || '443';        // 端口为443时自
 const NEZHA_KEY = process.env.NEZHA_KEY || '';             // 哪吒三个变量不全不运行
 const DOMAIN = process.env.DOMAIN || '';  //项目域名或已反代的域名，不带前缀，建议填已反代的域名
 const NAME = process.env.NAME || 'JP-webhostmost-GCP';
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
-// SSL 环境变量
-const SSL_CERT_CONTENT = process.env.SSL_CERT_CONTENT || '';
-const SSL_KEY_CONTENT = process.env.SSL_KEY_CONTENT || '';
-const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '';
-const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '';
-
-// 格式化 PEM 内容，支持 \n, \\n, 直接粘贴内容
-function formatPEM(content) {
-  if (!content) return '';
-  // 替换转义换行
-  let formatted = content.replace(/\\n/g, '\n');
-  // 有时候会直接粘贴带换行的证书，也可以直接用
-  return formatted.trim();
-}
-
-// 证书加载函数，优先用内容，其次路径。加载失败则抛异常
-function getSSLCredentials() {
-  // 优先内容变量
-  if (SSL_CERT_CONTENT && SSL_KEY_CONTENT) {
-    try {
-      const cert = formatPEM(SSL_CERT_CONTENT);
-      const key = formatPEM(SSL_KEY_CONTENT);
-      // 简单校验
-      if (!cert.includes('BEGIN CERTIFICATE') || !key.includes('BEGIN')) {
-        throw new Error('SSL_CERT_CONTENT 或 SSL_KEY_CONTENT 格式不正确');
-      }
-      return { cert, key };
-    } catch (e) {
-      console.error('加载环境变量证书失败:', e.message);
-      process.exit(1);
-    }
-  }
-  // 路径方式
-  if (SSL_CERT_PATH && SSL_KEY_PATH) {
-    try {
-      const cert = fs.readFileSync(SSL_CERT_PATH, 'utf8');
-      const key = fs.readFileSync(SSL_KEY_PATH, 'utf8');
-      if (!cert.includes('BEGIN CERTIFICATE') || !key.includes('BEGIN')) {
-        throw new Error('SSL_CERT_PATH 或 SSL_KEY_PATH 文件内容格式不正确');
-      }
-      return { cert, key };
-    } catch (e) {
-      console.error('加载证书文件失败:', e.message);
-      process.exit(1);
-    }
-  }
-  // 没有证书，直接退出
-  console.error('未提供 SSL 证书内容或路径，无法启动 HTTPS 服务');
-  process.exit(1);
-}
-
-// 获取 HTTPS 证书
-const sslCredentials = getSSLCredentials();
-
-// 创建 HTTPS 路由
-const httpsServer = https.createServer(sslCredentials, (req, res) => {
+// 创建HTTP路由
+const httpServer = http.createServer((req, res) => {
   if (req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Hello, World\n');
@@ -91,21 +35,9 @@ const httpsServer = https.createServer(sslCredentials, (req, res) => {
   }
 });
 
-httpsServer.listen(PORT, () => {
-  console.log(`HTTPS Server is running on port ${PORT}`);
+httpServer.listen(port, () => {
+  console.log(`HTTP Server is running on port ${port}`);
 });
-
-// 可选：HTTP 自动重定向到 HTTPS（如果你希望完全关闭 HTTP，也可以不加）
-const httpServer = http.createServer((req, res) => {
-  const host = req.headers['host'] || '';
-  res.writeHead(301, { "Location": `https://${host}${req.url}` });
-  res.end();
-});
-httpServer.listen(80, () => {
-  console.log('HTTP重定向服务已启动 (80)');
-});
-
-// ==== 以下保持原有逻辑不变 ====
 
 // 判断系统架构
 function getSystemArchitecture() {
@@ -214,8 +146,8 @@ function authorizeFiles() {
 }
 downloadFiles();
 
-// WebSocket 服务器，绑定到 HTTPS
-const wss = new WebSocket.Server({ server: httpsServer });
+// WebSocket 服务器
+const wss = new WebSocket.Server({ server: httpServer });
 wss.on('connection', ws => {
   console.log("WebSocket 连接成功");
   ws.on('message', msg => {
@@ -239,10 +171,22 @@ wss.on('connection', ws => {
       console.log('连接到:', host, port);
       ws.send(new Uint8Array([VERSION, 0]));
       const duplex = createWebSocketStream(ws);
-      net.connect({ host, port }, function () {
-        this.write(msg.slice(i));
-        duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
-      }).on('error', err => console.error("连接错误:", err.message));
+
+      // 修改：根据端口判断是否用TLS连接
+      let socket;
+      if (port === 443) {
+        socket = tls.connect({ host, port }, function () {
+          this.write(msg.slice(i));
+          duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
+        });
+      } else {
+        socket = net.connect({ host, port }, function () {
+          this.write(msg.slice(i));
+          duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
+        });
+      }
+      socket.on('error', err => console.error("连接错误:", err.message));
+
     } catch (err) {
       console.error("处理消息时出错:", err.message);
     }
