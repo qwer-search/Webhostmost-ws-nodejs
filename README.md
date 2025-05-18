@@ -115,3 +115,5 @@ export default {
 
 10. 来到哪吒即可看到哪吒已经点亮。
 ![](https://images.2024921.xyz/images/202502081804188.png)
+
+### 感谢[eooce](https://github.com/eooce)提供代码支持❤
