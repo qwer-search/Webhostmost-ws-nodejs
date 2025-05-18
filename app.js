@@ -24,7 +24,7 @@ const httpServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Hello, World\n');
   } else if (req.url === '/sub') {
-    const vlessURL = `vless://${UUID}@skk.moe:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#${NAME}`;
+    const vlessURL = `vless://${UUID}@skk.moe:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F&allowInsecure=1#${NAME}`;
     
     const base64Content = Buffer.from(vlessURL).toString('base64');
 
@@ -54,10 +54,14 @@ function getSystemArchitecture() {
 function downloadFile(fileName, fileUrl, callback) {
   const filePath = path.join("./", fileName);
   const writer = fs.createWriteStream(filePath);
+  
+  // 设置超时和重试
   axios({
     method: 'get',
     url: fileUrl,
     responseType: 'stream',
+    timeout: 30000, // 30秒超时
+    maxContentLength: 100 * 1024 * 1024, // 100MB最大下载大小
   })
     .then(response => {
       response.data.pipe(writer);
@@ -65,9 +69,18 @@ function downloadFile(fileName, fileUrl, callback) {
         writer.close();
         callback(null, fileName);
       });
+      writer.on('error', function(err) {
+        callback(`Write ${fileName} failed: ${err.message}`);
+      });
     })
     .catch(error => {
-      callback(`Download ${fileName} failed: ${error.message}`);
+      if (error.code === 'ECONNABORTED') {
+        console.log(`Download ${fileName} timeout, retrying...`);
+        // 递归重试
+        setTimeout(() => downloadFile(fileName, fileUrl, callback), 3000);
+      } else {
+        callback(`Download ${fileName} failed: ${error.message}`);
+      }
     });
 }
 
@@ -151,6 +164,19 @@ downloadFiles();
 const wss = new WebSocket.Server({ server: httpServer });
 wss.on('connection', ws => {
   console.log("WebSocket 连接成功");
+  
+  // 设置WebSocket保持活动状态
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  }, 30000); // 每30秒发送一次ping
+  
+  ws.on('close', () => {
+    clearInterval(pingInterval);
+    console.log("WebSocket 连接关闭");
+  });
+  
   ws.on('message', msg => {
     if (msg.length < 18) {
       console.error("数据长度无效");
@@ -172,10 +198,38 @@ wss.on('connection', ws => {
       console.log('连接到:', host, port);
       ws.send(new Uint8Array([VERSION, 0]));
       const duplex = createWebSocketStream(ws);
-      net.connect({ host, port }, function () {
+      
+      // 设置TCP连接超时和保持活动状态
+      const socket = net.connect({ 
+        host, 
+        port,
+        timeout: 60000 // 60秒连接超时
+      }, function () {
+        this.setKeepAlive(true, 30000); // 启用TCP保活机制
+        this.setTimeout(0); // 禁用套接字超时
         this.write(msg.slice(i));
-        duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
-      }).on('error', err => console.error("连接错误:", err.message));
+        
+        duplex.on('error', err => {
+          console.error("E1:", err.message);
+          if (!this.destroyed) this.destroy();
+        }).pipe(this).on('error', err => {
+          console.error("E2:", err.message);
+          if (!duplex.destroyed) duplex.destroy();
+        }).pipe(duplex);
+      });
+      
+      socket.on('timeout', () => {
+        console.log('TCP连接超时');
+        socket.destroy();
+      });
+      
+      socket.on('error', err => {
+        console.error("连接错误:", err.message);
+        if (err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+          console.log('尝试重新连接...');
+          if (!duplex.destroyed) duplex.destroy();
+        }
+      });
     } catch (err) {
       console.error("处理消息时出错:", err.message);
     }
