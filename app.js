@@ -7,16 +7,22 @@ const path = require('path');
 const net = require('net');
 const { exec, execSync } = require('child_process');
 const { WebSocket, createWebSocketStream } = require('ws');
+
 const logcb = (...args) => console.log.bind(this, ...args);
 const errcb = (...args) => console.error.bind(this, ...args);
+
 const UUID = process.env.UUID || 'b28f60af-d0b9-4ddf-baaa-7e49c93c380b';
 const uuid = UUID.replace(/-/g, "");
 const NEZHA_SERVER = process.env.NEZHA_SERVER || 'nezha.gvkoyeb.eu.org';
-const NEZHA_PORT = process.env.NEZHA_PORT || '443';        // 端口为443时自动开启tls
-const NEZHA_KEY = process.env.NEZHA_KEY || '';             // 哪吒三个变量不全不运行
-const DOMAIN = process.env.DOMAIN || '';  //项目域名或已反代的域名，不带前缀，建议填已反代的域名
-const NAME = process.env.NAME || 'JP-webhostmost-GCP';
+const NEZHA_PORT = process.env.NEZHA_PORT || '443';
+const NEZHA_KEY = process.env.NEZHA_KEY || '';
+const DOMAIN = process.env.DOMAIN || '';
+const NAME = process.env.NAME || 'JP-webhostmost-GCP'; // 此NAME变量在当前VLESS链接生成中未直接使用
 const port = process.env.PORT || 3000;
+
+// Cloudflare 支持的端口
+const CF_HTTPS_PORTS = [443, 2053, 2083, 2087, 2096, 8443];
+const CF_HTTP_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095];
 
 // 创建HTTP路由
 const httpServer = http.createServer((req, res) => {
@@ -24,12 +30,43 @@ const httpServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Hello, World\n');
   } else if (req.url === '/sub') {
-    const vlessURL = `vless://${UUID}@skk.moe:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#${NAME}`;
-    
-    const base64Content = Buffer.from(vlessURL).toString('base64');
+    const vlessLinks = [];
 
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end(base64Content + '\n');
+    // 1. 生成 “原始” 链接 (基于用户配置的 DOMAIN)
+    if (DOMAIN) {
+      const originalTlsUrl = `vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#原始-TLS-${DOMAIN}`;
+      vlessLinks.push(originalTlsUrl);
+
+      const originalNoTlsUrl = `vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2F#原始-NO-TLS-${DOMAIN}`;
+      vlessLinks.push(originalNoTlsUrl);
+    } else {
+      console.warn("DOMAIN 环境变量未设置，跳过生成“原始”链接。");
+    }
+
+    // 2. 生成 “优选” 链接 (基于 cloudflare.182682.xyz 和 Cloudflare 支持的端口)
+    const cfAddress = 'cloudflare.182682.xyz';
+
+    CF_HTTPS_PORTS.forEach(cfPort => {
+      const sniHost = DOMAIN || cfAddress; 
+      const linkNameDomainPart = DOMAIN || "CF-Default"; 
+
+      const vlessCfTlsUrl = `vless://${UUID}@${cfAddress}:${cfPort}?encryption=none&security=tls&sni=${sniHost}&type=ws&host=${sniHost}&path=%2F#优选-CF-TLS-${cfPort}-${linkNameDomainPart}`;
+      vlessLinks.push(vlessCfTlsUrl);
+    });
+
+    CF_HTTP_PORTS.forEach(cfPort => {
+      const sniHost = DOMAIN || cfAddress; 
+      const linkNameDomainPart = DOMAIN || "CF-Default";
+
+      const vlessCfNoTlsUrl = `vless://${UUID}@${cfAddress}:${cfPort}?encryption=none&security=none&type=ws&host=${sniHost}&path=%2F#优选-CF-NO-TLS-${cfPort}-${linkNameDomainPart}`;
+      vlessLinks.push(vlessCfNoTlsUrl);
+    });
+
+    const base64Content = vlessLinks.map(url => Buffer.from(url).toString('base64')).join('\n');
+
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(base64Content + '\n'); 
+
   } else {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found\n');
@@ -124,13 +161,10 @@ function authorizeFiles() {
     } else {
       console.log(`Empowerment success:${newPermissions.toString(8)} (${newPermissions.toString(10)})`);
 
-      // 运行ne-zha
       let NEZHA_TLS = '';
       if (NEZHA_SERVER && NEZHA_PORT && NEZHA_KEY) {
         if (NEZHA_PORT === '443') {
           NEZHA_TLS = '--tls';
-        } else {
-          NEZHA_TLS = '';
         }
         const command = `./npm -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} --skip-conn --disable-auto-update --skip-procs --report-delay 4 >/dev/null 2>&1 &`;
         try {
@@ -145,7 +179,13 @@ function authorizeFiles() {
     }
   });
 }
-downloadFiles();
+
+// 只有当Nezha相关环境变量都设置了才执行下载和运行
+if (NEZHA_SERVER && NEZHA_PORT && NEZHA_KEY) {
+    downloadFiles();
+} else {
+    console.log('Nezha variables not fully set, skipping agent download and execution.');
+}
 
 // WebSocket 服务器
 const wss = new WebSocket.Server({ server: httpServer });
@@ -175,9 +215,23 @@ wss.on('connection', ws => {
       net.connect({ host, port }, function () {
         this.write(msg.slice(i));
         duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
-      }).on('error', err => console.error("连接错误:", err.message));
+      }).on('error', err => {
+          console.error("连接错误:", err.message);
+          if (ws.readyState === WebSocket.OPEN) { // 检查 ws 是否仍然打开
+            ws.close(1011, "Upstream connection error");
+          }
+          duplex.destroy(err);
+      });
     } catch (err) {
       console.error("处理消息时出错:", err.message);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1011, "Internal server error");
+      }
     }
-  }).on('error', err => console.error("WebSocket 错误:", err.message));
+  }).on('error', err => {
+      console.error("WebSocket 错误:", err.message);
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1011, "WebSocket error");
+      }
+  });
 });
