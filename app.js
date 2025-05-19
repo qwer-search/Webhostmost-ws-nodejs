@@ -29,10 +29,10 @@ const httpServer = http.createServer((req, res) => {
     const allVlessLinks = [];
 
     if (DOMAIN) {
-      const originalTlsUrl = `vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#原始-TLS-${DOMAIN}`;
+      const originalTlsUrl = `vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#-TLS-${DOMAIN}`;
       allVlessLinks.push(originalTlsUrl);
 
-      const originalNoTlsUrl = `vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2F#原始-NO-TLS-${DOMAIN}`;
+      const originalNoTlsUrl = `vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2F#-NO-TLS-${DOMAIN}`;
       allVlessLinks.push(originalNoTlsUrl);
     } else {
       console.warn("DOMAIN 环境变量未设置，跳过生成“原始”链接。");
@@ -46,21 +46,10 @@ const httpServer = http.createServer((req, res) => {
     const effectiveSniForPreferred = DOMAIN;   
 
     allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:443?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-443-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2053?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-2053-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2083?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-2083-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2087?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-2087-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2096?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-2096-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:8443?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-8443-${preferredLinkSuffix_preferred}`);
+    
 
-    // 手动为每个 HTTP 端口生成链接
     allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:80?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-80-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:8080?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-8080-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:8880?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-8880-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2052?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-2052-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2082?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-2082-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2086?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-2086-${preferredLinkSuffix_preferred}`);
-    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:2095?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-2095-${preferredLinkSuffix_preferred}`);
-    // --- 结束: 新增的“优选”链接逻辑 ---
+    
 
     // 使用三个换行符分隔明文链接
     const finalTextOutput = allVlessLinks.join('\n\n\n');
