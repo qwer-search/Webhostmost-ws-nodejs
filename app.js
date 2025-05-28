@@ -1,6 +1,6 @@
 const os = require('os');
 const http = require('http');
-const { Buffer } = require('buffer'); // Buffer 仍然需要，因为原始脚本中其他地方可能用到，但这里不再用于Base64编码输出
+const { Buffer } = require('buffer'); 
 const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
@@ -17,7 +17,7 @@ const NEZHA_SERVER = process.env.NEZHA_SERVER || 'nezha.gvkoyeb.eu.org';
 const NEZHA_PORT = process.env.NEZHA_PORT || '443'; // 端口为443时自动开启tls
 const NEZHA_KEY = process.env.NEZHA_KEY || ''; // 哪吒三个变量不全不运行
 const DOMAIN = process.env.DOMAIN || ''; //项目域名或已反代的域名，不带前缀，建议填已反代的域名
-const NAME = process.env.NAME || 'JP-webhostmost-GCP'; // 注意：此NAME变量在当前版本的优选链接中未使用，原始链接使用DOMAIN作为名称后缀
+const NAME = process.env.NAME || 'JP-webhostmost-GCP'; // 注意：此NAME变量在当前版本的优选链接中未使用，默认链接使用DOMAIN作为名称后缀
 const port = process.env.PORT || 3000;
 
 // 创建HTTP路由
@@ -29,18 +29,18 @@ const httpServer = http.createServer((req, res) => {
     const allVlessLinks = [];
 
     if (DOMAIN) {
-      const originalTlsUrl = `vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#-TLS-${DOMAIN}`;
+      const originalTlsUrl = `vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#默认-TLS-${DOMAIN}`;
       allVlessLinks.push(originalTlsUrl);
 
-      const originalNoTlsUrl = `vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2F#-NO-TLS-${DOMAIN}`;
+      const originalNoTlsUrl = `vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2F#默认-NO-TLS-${DOMAIN}`;
       allVlessLinks.push(originalNoTlsUrl);
     } else {
-      console.warn("DOMAIN 环境变量未设置，跳过生成“原始”链接。");
+      console.warn("DOMAIN 环境变量未设置，跳过生成“默认”链接。");
     }
 
     const cfAddress_preferred = 'cloudflare.182682.xyz';
-    const preferredLinkNamePrefix = 'Pref'; 
-    const preferredLinkSuffix_preferred = 'CF-Default'; 
+    const preferredLinkNamePrefix = '优选域名'; 
+    const preferredLinkSuffix_preferred = 'CF'; 
 
     const effectiveHostForPreferred = DOMAIN; 
     const effectiveSniForPreferred = DOMAIN;   
