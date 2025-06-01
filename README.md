@@ -1,13 +1,13 @@
+[![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
+
+
+
+
+
+
+
+
 # Webhostmost项目部署
-
-## **重要警告**~~~~**重要警告**~~~~**重要警告**
-
-### **本项目由[eooce](https://github.com/eooce)提供，未经过作者同意擅自使用和篡改代码内容是可耻行为！**
-
-### **以上行为只包含Youtube视频创作收益者！**
-
-
-
 
 1. [注册Webhostmost](https://client.webhostmost.com/register.php)，邮箱认证后，点击**Buy New Hosting Plan**，选择左上角**Free Plan**，点击**Order Now**.
 
