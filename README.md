@@ -1,12 +1,6 @@
 [![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
 
 
-
-
-
-
-
-
 # Webhostmost项目部署
 
 1. [注册Webhostmost](https://client.webhostmost.com/register.php)，邮箱认证后，点击**Buy New Hosting Plan**，选择左上角**Free Plan**，点击**Order Now**.
