@@ -1,7 +1,10 @@
 # 赞助声明：
 
-[![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
+<a href="https://dartnode.com?aff=CraftyMouse750" target="_blank"><img src="https://status.dartnode.com/upload/logo1.png" width="100px"></a><br>
+I am honored that DARTNODE is offering a free server to sponsor my project.<br>
+DARTNODE's official Web Site : [https://dartnode.com](https://dartnode.com?aff=CraftyMouse750)
 
+https://github.com/qwer-search/Webhostmost-ws-nodejs
 
 # Webhostmost项目部署
 
