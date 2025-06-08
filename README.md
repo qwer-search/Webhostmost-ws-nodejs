@@ -1,6 +1,6 @@
 # 赞助声明：
 
-<a href="https://dartnode.com?aff=CraftyMouse750" target="_blank"><img src="https://status.dartnode.com/upload/logo1.png" width="100px"></a><br>
+<a href="https://dartnode.com?aff=CraftyMouse750" target="_blank"><img src="https://dartnode.com/assets/dash/images/brand/favicon.png" width="100px"></a><br>
 
 [![Powered by DartNode](https://dartnode.com/branding/DN-Open-Source-sm.png)](https://dartnode.com "Powered by DartNode - Free VPS for Open Source")
 
