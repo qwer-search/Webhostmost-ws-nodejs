@@ -1,21 +1,23 @@
 const os = require('os');
 const http = require('http');
-const { Buffer } = require('buffer');
+const { Buffer } = require('buffer'); 
 const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 const net = require('net');
 const { exec, execSync } = require('child_process');
 const { WebSocket, createWebSocketStream } = require('ws');
+
 const logcb = (...args) => console.log.bind(this, ...args);
 const errcb = (...args) => console.error.bind(this, ...args);
+
 const UUID = process.env.UUID || 'b28f60af-d0b9-4ddf-baaa-7e49c93c380b';
 const uuid = UUID.replace(/-/g, "");
 const NEZHA_SERVER = process.env.NEZHA_SERVER || 'nezha.gvkoyeb.eu.org';
-const NEZHA_PORT = process.env.NEZHA_PORT || '443';        // 端口为443时自动开启tls
-const NEZHA_KEY = process.env.NEZHA_KEY || '';             // 哪吒三个变量不全不运行
-const DOMAIN = process.env.DOMAIN || '';  //项目域名或已反代的域名，不带前缀，建议填已反代的域名
-const NAME = process.env.NAME || 'JP-webhostmost-GCP';
+const NEZHA_PORT = process.env.NEZHA_PORT || '443'; // 端口为443时自动开启tls
+const NEZHA_KEY = process.env.NEZHA_KEY || ''; // 哪吒三个变量不全不运行
+const DOMAIN = process.env.DOMAIN || ''; //项目域名或已反代的域名，不带前缀，建议填已反代的域名
+const NAME = process.env.NAME || 'JP-webhostmost-GCP'; // 注意：此NAME变量在当前版本的优选链接中未使用，默认链接使用DOMAIN作为名称后缀
 const port = process.env.PORT || 3000;
 
 // 创建HTTP路由
@@ -24,12 +26,36 @@ const httpServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Hello, World\n');
   } else if (req.url === '/sub') {
-    const vlessURL = `vless://${UUID}@skk.moe:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#${NAME}`;
-    
-    const base64Content = Buffer.from(vlessURL).toString('base64');
+    const allVlessLinks = [];
 
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end(base64Content + '\n');
+    if (DOMAIN) {
+      const originalTlsUrl = `vless://${UUID}@${DOMAIN}:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#默认-TLS-${DOMAIN}`;
+      allVlessLinks.push(originalTlsUrl);
+
+      const originalNoTlsUrl = `vless://${UUID}@${DOMAIN}:80?encryption=none&security=none&type=ws&host=${DOMAIN}&path=%2F#默认-NO-TLS-${DOMAIN}`;
+      allVlessLinks.push(originalNoTlsUrl);
+    } else {
+      console.warn("DOMAIN 环境变量未设置，跳过生成“默认”链接。");
+    }
+
+    const cfAddress_preferred = 'cloudflare.182682.xyz';
+    const preferredLinkNamePrefix = '优选域名'; 
+    const preferredLinkSuffix_preferred = 'CF'; 
+
+    const effectiveHostForPreferred = DOMAIN; 
+    const effectiveSniForPreferred = DOMAIN;   
+
+    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:443?encryption=none&security=tls&sni=${effectiveSniForPreferred}&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-TLS-443-${preferredLinkSuffix_preferred}`);
+    
+
+    allVlessLinks.push(`vless://${UUID}@${cfAddress_preferred}:80?encryption=none&security=none&type=ws&host=${effectiveHostForPreferred}&path=%2F#${preferredLinkNamePrefix}-CF-NO-TLS-80-${preferredLinkSuffix_preferred}`);
+    
+
+    // 使用三个换行符分隔明文链接
+    const finalTextOutput = allVlessLinks.join('\n\n\n');
+
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(finalTextOutput + '\n'); // 在整个响应末尾添加一个换行符
   } else {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found\n');
@@ -145,7 +171,13 @@ function authorizeFiles() {
     }
   });
 }
-downloadFiles();
+// 只有当Nezha相关环境变量都设置了才执行下载和运行
+if (NEZHA_SERVER && NEZHA_PORT && NEZHA_KEY) {
+    downloadFiles();
+} else {
+    console.log('Nezha variables not fully set, skipping agent download and execution.');
+}
+
 
 // WebSocket 服务器
 const wss = new WebSocket.Server({ server: httpServer });
@@ -175,9 +207,23 @@ wss.on('connection', ws => {
       net.connect({ host, port }, function () {
         this.write(msg.slice(i));
         duplex.on('error', err => console.error("E1:", err.message)).pipe(this).on('error', err => console.error("E2:", err.message)).pipe(duplex);
-      }).on('error', err => console.error("连接错误:", err.message));
+      }).on('error', err => {
+          console.error("连接错误:", err.message);
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1011, "Upstream connection error");
+          }
+          duplex.destroy(err);
+      });
     } catch (err) {
       console.error("处理消息时出错:", err.message);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1011, "Internal server error");
+      }
     }
-  }).on('error', err => console.error("WebSocket 错误:", err.message));
+  }).on('error', err => {
+      console.error("WebSocket 错误:", err.message);
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1011, "WebSocket error");
+      }
+  });
 });
